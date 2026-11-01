@@ -1,0 +1,25 @@
+{
+    // Nord theme for Fastfetch
+    // Installed to ~/.config/fastfetch/config.jsonc by ricing.sh
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "logo": {
+        "source": "auto",
+        "padding": { "top": 1, "left": 2, "right": 4 }
+    },
+    "modules": [
+        { "type": "title", "color": { "user": "#88C0D0", "at": "#4C566A", "host": "#81A1C1" } },
+        { "type": "separator", "string": "─" },
+        { "type": "os", "key": "OS", "keyColor": "#8FBCBB" },
+        { "type": "kernel", "key": "Kernel", "keyColor": "#8FBCBB" },
+        { "type": "uptime", "key": "Uptime", "keyColor": "#81A1C1" },
+        { "type": "packages", "key": "Packages", "keyColor": "#81A1C1" },
+        { "type": "shell", "key": "Shell", "keyColor": "#5E81AC" },
+        { "type": "de", "key": "Desktop", "keyColor": "#5E81AC" },
+        { "type": "terminal", "key": "Terminal", "keyColor": "#5E81AC" },
+        { "type": "cpu", "key": "CPU", "keyColor": "#A3BE8C" },
+        { "type": "memory", "key": "Memory", "keyColor": "#A3BE8C" },
+        { "type": "disk", "key": "Disk", "keyColor": "#A3BE8C" },
+        { "type": "break" },
+        { "type": "colors", "symbol": "circle" }
+    ]
+}
