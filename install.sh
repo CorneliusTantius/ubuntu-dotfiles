@@ -13,8 +13,6 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
-NORDIC_REPO="https://github.com/EliverLara/Nordic.git"
-PAPIRUS_NORD_REPO="https://github.com/Adapta-Projects/Papirus-Nord.git"
 KITTY_KEY_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/kitty/"
 
 if ! (: < /dev/tty) 2> /dev/null; then
@@ -42,8 +40,6 @@ fi
 TITLES=(
     "Packages"
     "Nerd Font"
-    "Nordic GTK"
-    "Papirus-Nord"
     "Dotfiles and shell"
     "GNOME look"
     "Keys, touchpad, dock"
@@ -53,10 +49,8 @@ TITLES=(
 TAGLINES=(
     "kitty, starship, fastfetch, git, curl, dconf-cli (sudo)"
     "JetBrains Mono Nerd Font, downloaded from GitHub"
-    "Nordic GTK theme, downloaded into ~/.themes"
-    "Papirus-Nord folder colors, upstream Install.sh (sudo)"
     "configs into ~/.config, shell aliases, case-insensitive bash"
-    "dark mode, Nordic, Papirus, Nerd Font, pitch black wallpaper"
+    "dark mode, Nerd Font monospace, pitch black wallpaper"
     "touchpad scrolling, dock layout, Super+Return, Super+Q"
     "Kitty for Ctrl+Alt+T and x-terminal-emulator (sudo)"
     "remove Ptyxis, GNOME Terminal and apport-gtk (sudo)"
@@ -64,8 +58,6 @@ TAGLINES=(
 STEP_FUNCS=(
     install_packages
     install_nerd_font
-    install_nordic
-    install_papirus_nord
     install_dotfiles
     apply_gnome_settings
     apply_keys_touchpad_dock
@@ -88,7 +80,7 @@ ask() {
 
 install_packages() {
     sudo apt-get update
-    sudo apt-get install -y kitty starship fastfetch papirus-icon-theme git curl fontconfig dconf-cli
+    sudo apt-get install -y kitty starship fastfetch git curl fontconfig dconf-cli
 }
 
 install_nerd_font() {
@@ -97,26 +89,6 @@ install_nerd_font() {
     curl -fL --progress-bar "$NERD_FONT_URL" -o "$WORK/JetBrainsMono.tar.xz"
     tar -xf "$WORK/JetBrainsMono.tar.xz" -C "$font_dir"
     fc-cache -f "$HOME/.local/share/fonts"
-}
-
-install_nordic() {
-    git clone --depth 1 "$NORDIC_REPO" "$WORK/Nordic"
-    rm -rf "$WORK/Nordic/.git"
-    mkdir -p "$HOME/.themes"
-    rm -rf "$HOME/.themes/Nordic"
-    mv "$WORK/Nordic" "$HOME/.themes/Nordic"
-}
-
-install_papirus_nord() {
-    if [[ ! -d /usr/share/icons/Papirus ]]; then
-        echo "Papirus base theme is missing. Run the packages step first." >&2
-        return 1
-    fi
-    git clone --depth 1 "$PAPIRUS_NORD_REPO" "$WORK/Papirus-Nord"
-    # Upstream Install.sh copies files into /usr/share/icons and /usr/bin, so it needs sudo.
-    # Its first prompt asks about Linux Universe. "N" selects the standard papirus-folders script.
-    sudo -v
-    (cd "$WORK/Papirus-Nord" && printf 'N\n' | sudo bash ./install)
 }
 
 install_dotfiles() {
@@ -144,12 +116,9 @@ install_dotfiles() {
 apply_gnome_settings() {
     gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
     gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11'
-    if [[ -d "$HOME/.themes/Nordic" ]]; then
-        gsettings set org.gnome.desktop.interface gtk-theme 'Nordic'
-    fi
-    if [[ -d /usr/share/icons/Papirus ]]; then
-        gsettings set org.gnome.desktop.interface icon-theme 'Papirus'
-    fi
+    # Ubuntu's Yaru theme and icons. Resets them in case an older run set something else.
+    gsettings reset org.gnome.desktop.interface gtk-theme
+    gsettings reset org.gnome.desktop.interface icon-theme
     # Solid pitch black background instead of an image, for both light and dark mode.
     gsettings set org.gnome.desktop.background picture-uri ''
     gsettings set org.gnome.desktop.background picture-uri-dark ''
@@ -186,7 +155,7 @@ apply_keys_touchpad_dock() {
 
 make_kitty_default_terminal() {
     if ! command -v kitty > /dev/null; then
-        echo "Kitty is not installed. Run step 1 first." >&2
+        echo "Kitty is not installed. Run the packages step first." >&2
         return 1
     fi
     # Ubuntu 26.04 reads the default terminal from xdg-terminals.list. Ctrl+Alt+T goes through it.
@@ -199,11 +168,11 @@ make_kitty_default_terminal() {
 
 remove_other_terminals() {
     if ! command -v kitty > /dev/null; then
-        echo "Kitty is not installed. Run steps 1 and 8 first." >&2
+        echo "Kitty is not installed. Run the packages step first." >&2
         return 1
     fi
     if [[ "$(readlink -f /usr/bin/x-terminal-emulator)" != "/usr/bin/kitty" ]]; then
-        echo "Kitty is not the default terminal yet. Run step 8 first." >&2
+        echo "Kitty is not the default terminal yet. Run the default terminal step first." >&2
         return 1
     fi
     # apport-gtk depends on a terminal from x-terminal-emulator. Removing it with Ptyxis
@@ -315,10 +284,10 @@ finish() {
     printf '  %sAll set%s  %d installed, %d skipped, %ds total.\n\n' \
         "$GREEN$BOLD" "$RESET" "$done_count" "$skipped_count" "$SECONDS"
     printf '  %sNext%s\n' "$BOLD" "$RESET"
-    printf '   %s•%s Log out and back in once, for GTK, icons and keybindings.\n' "$FROST" "$RESET"
+    printf '   %s•%s Log out and back in once, for GNOME settings and keybindings.\n' "$FROST" "$RESET"
     printf '   %s•%s Open bash sessions: %ssource ~/.bashrc && bind -f ~/.inputrc%s\n' "$FROST" "$RESET" "$SNOW" "$RESET"
     printf '   %s•%s Open Kitty windows: Ctrl+Shift+F5 reloads kitty.conf, or reopen them.\n' "$FROST" "$RESET"
-    printf '   %s•%s Super+Return opens Kitty. Ctrl+Alt+T does too, once step 8 has run.\n\n' "$FROST" "$RESET"
+    printf '   %s•%s Super+Return opens Kitty. Ctrl+Alt+T does too, once the default terminal step has run.\n\n' "$FROST" "$RESET"
 }
 
 main() {
