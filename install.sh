@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # install.sh: one-shot Nord rice for Ubuntu 26.04 GNOME (bash, Kitty, Starship, Fastfetch).
 #
-# Asks before each section. Needs a terminal, because answers are read from /dev/tty.
-# Copies configs from this folder into $HOME and overwrites existing files without a backup:
-#   ~/.config/kitty/kitty.conf, ~/.config/starship.toml, ~/.config/fastfetch/config.jsonc
+# Asks before each step and redraws a progress dashboard after each one.
+# Needs a terminal, because answers are read from /dev/tty.
+# Copies configs from this folder into $HOME and overwrites existing files without a backup.
 # Loads touchpad and dock settings from gnome/*.dconf (snapshots of the current setup).
-# Appends the Starship init line and a `..` alias to ~/.bashrc, once each.
+# Appends shell settings to ~/.bashrc and ~/.inputrc, once each.
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,9 +22,67 @@ if ! (: < /dev/tty) 2> /dev/null; then
     exit 1
 fi
 
+# Nord palette as truecolor escapes. Plain text when output is not a terminal.
+if [[ -t 1 && "${TERM:-dumb}" != dumb ]]; then
+    FROST=$'\033[38;2;136;192;208m'
+    TEAL=$'\033[38;2;143;188;187m'
+    GREEN=$'\033[38;2;163;190;140m'
+    RED=$'\033[38;2;191;97;106m'
+    YELLOW=$'\033[38;2;235;203;139m'
+    MUTED=$'\033[38;2;76;86;106m'
+    SNOW=$'\033[38;2;216;222;233m'
+    BOLD=$'\033[1m'
+    RESET=$'\033[0m'
+    IS_TTY=1
+else
+    FROST="" TEAL="" GREEN="" RED="" YELLOW="" MUTED="" SNOW="" BOLD="" RESET=""
+    IS_TTY=0
+fi
+
+TITLES=(
+    "Packages"
+    "Nerd Font"
+    "Nordic GTK"
+    "Papirus-Nord"
+    "Dotfiles and shell"
+    "GNOME look"
+    "Keys, touchpad, dock"
+    "Default terminal"
+    "Other terminals"
+)
+TAGLINES=(
+    "kitty, starship, fastfetch, git, curl, dconf-cli (sudo)"
+    "JetBrains Mono Nerd Font, downloaded from GitHub"
+    "Nordic GTK theme, downloaded into ~/.themes"
+    "Papirus-Nord folder colors, upstream Install.sh (sudo)"
+    "configs into ~/.config, shell aliases, case-insensitive bash"
+    "dark mode, Nordic, Papirus, Nerd Font, pitch black wallpaper"
+    "touchpad scrolling, dock layout, Super+Return, Super+Q"
+    "Kitty for Ctrl+Alt+T and x-terminal-emulator (sudo)"
+    "remove Ptyxis, GNOME Terminal and apport-gtk (sudo)"
+)
+STEP_FUNCS=(
+    install_packages
+    install_nerd_font
+    install_nordic
+    install_papirus_nord
+    install_dotfiles
+    apply_gnome_settings
+    apply_keys_touchpad_dock
+    make_kitty_default_terminal
+    remove_other_terminals
+)
+STATUS=()
+DURATION=()
+for _ in "${TITLES[@]}"; do
+    STATUS+=(pending)
+    DURATION+=(0)
+done
+
 ask() {
     local reply
-    read -rp "$1 [y/N] " reply < /dev/tty
+    printf '  %s❯%s Run this step? %s[y/N]%s ' "$FROST" "$RESET" "$MUTED" "$RESET"
+    read -r reply < /dev/tty
     [[ "$reply" =~ ^[Yy]$ ]]
 }
 
@@ -153,41 +211,125 @@ remove_other_terminals() {
     sudo apt-get remove -y ptyxis apport-gtk gnome-terminal gnome-terminal-data
 }
 
+# ---- dashboard ----------------------------------------------------------
+
+clear_screen() {
+    if (( IS_TTY )); then
+        printf '\033[H\033[2J\033[3J'
+    fi
+}
+
+rule() {
+    printf '─%.0s' $(seq 1 "$1")
+}
+
+banner() {
+    printf '%s╭%s╮%s\n' "$FROST" "$(rule 42)" "$RESET"
+    printf '%s│%s%-42s%s│%s\n' "$FROST" "$BOLD$SNOW" "    N O R D   R I C E" "$RESET$FROST" "$RESET"
+    printf '%s│%s%-42s%s│%s\n' "$FROST" "$TEAL" "    Ubuntu 26.04 * GNOME * Kitty" "$RESET$FROST" "$RESET"
+    printf '%s╰%s╯%s\n' "$FROST" "$(rule 42)" "$RESET"
+}
+
+render() {
+    local total=${#TITLES[@]} done_count=0 filled bar i icon color line
+    for i in "${!TITLES[@]}"; do
+        if [[ "${STATUS[i]}" == done ]]; then
+            done_count=$((done_count + 1))
+        fi
+    done
+    filled=$((done_count * 30 / total))
+    bar=""
+    for ((i = 0; i < 30; i++)); do
+        if ((i < filled)); then
+            bar+="█"
+        else
+            bar+="░"
+        fi
+    done
+
+    clear_screen
+    echo
+    banner
+    echo
+    printf '  %sProgress%s  %s%s%s  %s%d of %d%s\n\n' \
+        "$BOLD" "$RESET" "$GREEN" "$bar" "$RESET" "$SNOW" "$done_count" "$total" "$RESET"
+    for i in "${!TITLES[@]}"; do
+        case "${STATUS[i]}" in
+            done)    icon="✔" color="$GREEN" ;;
+            failed)  icon="✘" color="$RED" ;;
+            skipped) icon="↷" color="$YELLOW" ;;
+            running) icon="●" color="$FROST" ;;
+            *)       icon="○" color="$MUTED" ;;
+        esac
+        line="$(printf '%-22s' "${TITLES[i]}")"
+        printf '  %s%s%s  %s%s%s' "$color" "$icon" "$RESET" "$SNOW" "$line" "$RESET"
+        case "${STATUS[i]}" in
+            done)    printf '  %s%ss%s\n' "$MUTED" "${DURATION[i]}" "$RESET" ;;
+            skipped) printf '  %sskipped%s\n' "$YELLOW" "$RESET" ;;
+            failed)  printf '  %sfailed%s\n' "$RED" "$RESET" ;;
+            running) printf '  %snow%s\n' "$FROST" "$RESET" ;;
+            *)       printf '\n' ;;
+        esac
+    done
+    echo
+}
+
+run_step() {
+    local i=$1 rc=0 start
+    STATUS[i]=running
+    render
+    printf '  %s── Step %d of %d ─────────────────────────%s\n' "$FROST" $((i + 1)) "${#TITLES[@]}" "$RESET"
+    printf '  %s%s%s\n' "$BOLD$SNOW" "${TITLES[i]}" "$RESET"
+    printf '  %s%s%s\n\n' "$MUTED" "${TAGLINES[i]}" "$RESET"
+    if ! ask; then
+        STATUS[i]=skipped
+        return 0
+    fi
+    echo
+    start=$SECONDS
+    # Run the step in a subshell with errexit, so a failing command stops it.
+    set +e
+    ( set -e; "${STEP_FUNCS[i]}" )
+    rc=$?
+    set -e
+    DURATION[i]=$((SECONDS - start))
+    if (( rc != 0 )); then
+        STATUS[i]=failed
+        render
+        printf '  %s✘ %s failed (exit %d).%s\n' "$RED" "${TITLES[i]}" "$rc" "$RESET"
+        printf '  Fix the problem above and run install.sh again. Finished steps can be repeated.\n\n'
+        exit "$rc"
+    fi
+    STATUS[i]=done
+}
+
+finish() {
+    local i done_count=0 skipped_count=0
+    for i in "${!TITLES[@]}"; do
+        case "${STATUS[i]}" in
+            done)    done_count=$((done_count + 1)) ;;
+            skipped) skipped_count=$((skipped_count + 1)) ;;
+        esac
+    done
+    render
+    printf '  %sAll set%s  %d installed, %d skipped, %ds total.\n\n' \
+        "$GREEN$BOLD" "$RESET" "$done_count" "$skipped_count" "$SECONDS"
+    printf '  %sNext%s\n' "$BOLD" "$RESET"
+    printf '   %s•%s Log out and back in once, for GTK, icons and keybindings.\n' "$FROST" "$RESET"
+    printf '   %s•%s Open bash sessions: %ssource ~/.bashrc && bind -f ~/.inputrc%s\n' "$FROST" "$RESET" "$SNOW" "$RESET"
+    printf '   %s•%s Open Kitty windows: Ctrl+Shift+F5 reloads kitty.conf, or reopen them.\n' "$FROST" "$RESET"
+    printf '   %s•%s Super+Return opens Kitty. Ctrl+Alt+T does too, once step 8 has run.\n\n' "$FROST" "$RESET"
+}
+
 main() {
-    echo "Nord rice for Ubuntu 26.04 GNOME. Each step asks first."
-
-    if ask "1. Install apt packages (kitty, starship, fastfetch, papirus-icon-theme, git, curl, fontconfig, dconf-cli)? Uses sudo."; then
-        install_packages
-    fi
-    if ask "2. Download JetBrains Mono Nerd Font from github.com/ryanoasis/nerd-fonts?"; then
-        install_nerd_font
-    fi
-    if ask "3. Download the Nordic GTK theme from github.com/EliverLara/Nordic into ~/.themes?"; then
-        install_nordic
-    fi
-    if ask "4. Download Papirus-Nord from github.com/Adapta-Projects/Papirus-Nord and run its Install.sh with sudo?"; then
-        install_papirus_nord
-    fi
-    if ask "5. Copy kitty, starship and fastfetch configs into ~/.config (overwrites existing files, no backup) and add Starship, a \`..\` alias, and case-insensitive completion and globbing to your shell setup?"; then
-        install_dotfiles
-    fi
-    if ask "6. Set GNOME to dark mode, Nordic GTK, Papirus icons, the Nerd Font as monospace and a pitch black wallpaper?"; then
-        apply_gnome_settings
-    fi
-    if ask "7. Set touchpad scrolling and dock layout to your current setup, Super+Return for Kitty, and Super+Q to close windows instead of Alt+F4?"; then
-        apply_keys_touchpad_dock
-    fi
-    if ask "8. Make Kitty the default terminal (Ctrl+Alt+T and x-terminal-emulator)? Uses sudo."; then
-        make_kitty_default_terminal
-    fi
-    if ask "9. Remove Ptyxis, GNOME Terminal and apport-gtk (the crash-report popup), leaving only Kitty? Uses sudo."; then
-        remove_other_terminals
-    fi
-
-    echo "Done. Log out and back in so the GTK, icon and keybinding changes apply everywhere."
-    echo "Open bash sessions: run  source ~/.bashrc && bind -f ~/.inputrc"
-    echo "Open Kitty windows: press Ctrl+Shift+F5 to reload kitty.conf, or close and reopen them."
-    echo "Super+Return opens Kitty. Ctrl+Alt+T opens Kitty too, once step 8 has run."
+    SECONDS=0
+    trap 'printf "\n  %sStopped.%s Run install.sh again to start over. Each step asks first.\n" "$YELLOW" "$RESET"; exit 130' INT
+    local i
+    clear_screen
+    for i in "${!TITLES[@]}"; do
+        run_step "$i"
+    done
+    finish
 }
 
 main
