@@ -50,7 +50,7 @@ TAGLINES=(
     "kitty, starship, fastfetch, git, curl, dconf-cli (sudo)"
     "JetBrains Mono Nerd Font, downloaded from GitHub"
     "configs into ~/.config, shell aliases, case-insensitive bash"
-    "dark mode, Nerd Font monospace, pitch black wallpaper"
+    "dark mode, blue accent, Nord background, Nerd Font monospace"
     "touchpad scrolling, dock layout, Super+Return, Super+Q"
     "Kitty for Ctrl+Alt+T and x-terminal-emulator (sudo)"
     "remove Ptyxis, GNOME Terminal and apport-gtk (sudo)"
@@ -116,15 +116,16 @@ install_dotfiles() {
 apply_gnome_settings() {
     gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
     gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11'
-    # Ubuntu's Yaru theme and icons. Resets them in case an older run set something else.
-    gsettings reset org.gnome.desktop.interface gtk-theme
+    # Yaru with a blue accent. GTK3 apps take the accent from the theme name, libadwaita apps from accent-color.
+    gsettings set org.gnome.desktop.interface gtk-theme 'Yaru-blue'
+    gsettings set org.gnome.desktop.interface accent-color 'blue'
     gsettings reset org.gnome.desktop.interface icon-theme
-    # Solid pitch black background instead of an image, for both light and dark mode.
+    # Solid Nord background (Polar Night, #2E3440) instead of an image, for both light and dark mode.
     gsettings set org.gnome.desktop.background picture-uri ''
     gsettings set org.gnome.desktop.background picture-uri-dark ''
     gsettings set org.gnome.desktop.background picture-options 'none'
     gsettings set org.gnome.desktop.background color-shading-type 'solid'
-    gsettings set org.gnome.desktop.background primary-color '#000000'
+    gsettings set org.gnome.desktop.background primary-color '#2E3440'
 }
 
 add_kitty_keybinding() {
